@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# portable ffmpeg binary (downloaded, not versioned)
+bin/ffmpeg/
+bin/*.zip
+
+# generated audio + state, keep folder structure via .gitkeep
+djmcp/storage/tracks/*
+djmcp/storage/processed/*
+djmcp/storage/exports/*
+djmcp/storage/state.db
+!djmcp/storage/tracks/.gitkeep
+!djmcp/storage/processed/.gitkeep
+!djmcp/storage/exports/.gitkeep
+!djmcp/storage/loops/*.wav
+!djmcp/storage/loops/README.md
