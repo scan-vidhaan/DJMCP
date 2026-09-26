@@ -3,8 +3,13 @@
 from fastapi import FastAPI
 
 from djmcp import __version__
+from djmcp.routes import jobs, transcribe, youtube
 
 app = FastAPI(title="DJ MCP", version=__version__)
+
+app.include_router(youtube.router)
+app.include_router(jobs.router)
+app.include_router(transcribe.router)
 
 
 @app.get("/health")

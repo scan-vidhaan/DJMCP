@@ -10,7 +10,9 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "mcp>=1.0",
     "yt-dlp>=2024.8.6",
-    "duckduckgo-search>=6.2",
+    "requests>=2.31",
+    "ddgs>=8.0",
+    "faster-whisper>=1.0",
     "pydub>=0.25",
     "librosa>=0.10",
     "soundfile>=0.12",
@@ -32,6 +34,7 @@ build-backend = "hatchling.build"
 packages = ["djmcp"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 markers = [
-    "integration: hits real network services (YouTube, DuckDuckGo); excluded by default",
+    "integration: hits real network services (YouTube, Firecrawl); excluded by default",
 ]
