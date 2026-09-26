@@ -24,6 +24,7 @@ from pathlib import Path
 from faster_whisper import WhisperModel
 
 from djmcp.config import TRACKS_DIR
+from djmcp.tools.common import resolve_track_path
 
 logger = logging.getLogger(__name__)
 
@@ -42,17 +43,13 @@ def _get_model(model_size: str) -> WhisperModel:
     return model
 
 
-def _track_path(track_id: str) -> Path:
-    return TRACKS_DIR / f"{track_id}.mp3"
-
-
 def _cache_path(track_id: str) -> Path:
     return TRACKS_DIR / f"{track_id}.transcript.json"
 
 
 def _transcribe_blocking(track_id: str, model_size: str, language: str | None) -> dict:
-    audio_path = _track_path(track_id)
-    if not audio_path.exists():
+    audio_path = resolve_track_path(track_id)
+    if audio_path is None:
         raise FileNotFoundError(f"no downloaded track for track_id={track_id!r}")
 
     model = _get_model(model_size)

@@ -35,5 +35,13 @@ def _find_bundled(binary: str) -> str | None:
 FFMPEG_PATH = _find_bundled("ffmpeg") or shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE_PATH = _find_bundled("ffprobe") or shutil.which("ffprobe") or "ffprobe"
 
+# pydub's own ffprobe lookup (pydub.utils.get_prober_name) only ever checks
+# PATH -- it ignores AudioSegment.ffprobe entirely, so setting that alone
+# doesn't help. Prepending the bundled dir to PATH fixes ffmpeg *and*
+# ffprobe resolution for every tool uniformly, with no per-library
+# workarounds needed.
+if _BUNDLED_FFMPEG_DIR.exists():
+    os.environ["PATH"] = f"{_BUNDLED_FFMPEG_DIR}{os.pathsep}{os.environ.get('PATH', '')}"
+
 HOST = os.environ.get("DJMCP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("DJMCP_PORT", "8000"))
