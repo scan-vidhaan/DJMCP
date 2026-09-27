@@ -8,7 +8,6 @@ sample offsets. Outputs always go to storage/processed/.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 
 from pydub import AudioSegment
@@ -16,15 +15,11 @@ from pydub import AudioSegment
 from djmcp.config import PROCESSED_DIR
 from djmcp.tools import analysis
 from djmcp.tools.common import resolve_track_path
+from djmcp.tools.dsp import new_track_id
 
 logger = logging.getLogger(__name__)
 
 SECTION_NAMES = ("intro", "drop", "breakdown", "outro")
-
-
-def _new_track_id(source_track_id: str, suffix: str, *parts: object) -> str:
-    digest = hashlib.sha1(f"{source_track_id}-{suffix}-{parts}".encode()).hexdigest()[:8]
-    return f"{source_track_id}-{suffix}-{digest}"
 
 
 def _export(audio: AudioSegment, track_id: str) -> dict:
@@ -57,7 +52,7 @@ def trim(track_id: str, start_sec: float, end_sec: float, snap_to_beat: bool = T
 
     audio = _load_audio(track_id)
     segment = audio[start_sec * 1000 : end_sec * 1000]
-    new_id = _new_track_id(track_id, "trim", round(start_sec, 3), round(end_sec, 3))
+    new_id = new_track_id(track_id, "trim", round(start_sec, 3), round(end_sec, 3))
     return _export(segment, new_id)
 
 
@@ -78,7 +73,7 @@ def split_at_beats(track_id: str, beat_indices: list[int]) -> list[dict]:
         if end_sec <= start_sec:
             continue
         segment = audio[start_sec * 1000 : end_sec * 1000]
-        new_id = _new_track_id(track_id, f"split{i}", round(start_sec, 3), round(end_sec, 3))
+        new_id = new_track_id(track_id, f"split{i}", round(start_sec, 3), round(end_sec, 3))
         results.append(_export(segment, new_id))
     return results
 
@@ -107,5 +102,5 @@ def extract_section(track_id: str, section_name: str) -> dict:
 
     audio = _load_audio(track_id)
     segment = audio[chosen["start"] * 1000 : chosen["end"] * 1000]
-    new_id = _new_track_id(track_id, section_name, chosen["start"], chosen["end"])
+    new_id = new_track_id(track_id, section_name, chosen["start"], chosen["end"])
     return _export(segment, new_id)

@@ -1,0 +1,92 @@
+[
+  {
+    "name": "kick_four_on_floor_120",
+    "bpm": 120,
+    "bars": 2,
+    "file": "kick_four_on_floor_120.mp3"
+  },
+  {
+    "name": "kick_snare_house_120",
+    "bpm": 120,
+    "bars": 2,
+    "file": "kick_snare_house_120.mp3"
+  },
+  {
+    "name": "hihat_offbeat_120",
+    "bpm": 120,
+    "bars": 2,
+    "file": "hihat_offbeat_120.mp3"
+  },
+  {
+    "name": "hihat_straight_16th_120",
+    "bpm": 120,
+    "bars": 2,
+    "file": "hihat_straight_16th_120.mp3"
+  },
+  {
+    "name": "clap_backbeat_120",
+    "bpm": 120,
+    "bars": 2,
+    "file": "clap_backbeat_120.mp3"
+  },
+  {
+    "name": "808_pulse_120",
+    "bpm": 120,
+    "bars": 2,
+    "file": "808_pulse_120.mp3"
+  },
+  {
+    "name": "full_groove_house_124",
+    "bpm": 124,
+    "bars": 2,
+    "file": "full_groove_house_124.mp3"
+  },
+  {
+    "name": "kick_trap_140",
+    "bpm": 140,
+    "bars": 2,
+    "file": "kick_trap_140.mp3"
+  },
+  {
+    "name": "ohat_trap_140",
+    "bpm": 140,
+    "bars": 2,
+    "file": "ohat_trap_140.mp3"
+  },
+  {
+    "name": "hihat_trap_roll_140",
+    "bpm": 140,
+    "bars": 2,
+    "file": "hihat_trap_roll_140.mp3"
+  },
+  {
+    "name": "808_trap_140",
+    "bpm": 140,
+    "bars": 2,
+    "file": "808_trap_140.mp3"
+  },
+  {
+    "name": "clap_trap_140",
+    "bpm": 140,
+    "bars": 2,
+    "file": "clap_trap_140.mp3"
+  },
+  {
+    "name": "kick_snare_dnb_174",
+    "bpm": 174,
+    "bars": 2,
+    "file": "kick_snare_dnb_174.mp3"
+  },
+  {
+    "name": "hihat_dnb_174",
+    "bpm": 174,
+    "bars": 2,
+    "file": "hihat_dnb_174.mp3"
+  },
+  {
+    "name": "full_groove_dnb_174",
+    "bpm": 174,
+    "bars": 2,
+    "file": "full_groove_dnb_174.mp3"
+  }
+]

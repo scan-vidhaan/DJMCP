@@ -46,25 +46,43 @@ def _make_click_track_mp3(path, bpm: int, duration_sec: float, sr: int) -> None:
 
 
 @pytest.fixture
-def synthetic_track(monkeypatch, tmp_path):
-    """A synthetic click-track track_id, with TRACKS_DIR/PROCESSED_DIR redirected to tmp_path."""
+def synthetic_dirs(monkeypatch, tmp_path):
+    """Redirect TRACKS_DIR/PROCESSED_DIR to tmp_path across every module that
+    imported them by name at import time (so patching djmcp.config alone
+    wouldn't reach these already-bound references)."""
     tracks_dir = tmp_path / "tracks"
     processed_dir = tmp_path / "processed"
     tracks_dir.mkdir()
     processed_dir.mkdir()
 
-    # Each of these modules imported TRACKS_DIR/PROCESSED_DIR by name at
-    # import time, so the redirect has to happen on each module's own
-    # namespace, not on djmcp.config.
     import djmcp.tools.analysis as analysis_mod
     import djmcp.tools.common as common_mod
+    import djmcp.tools.dsp as dsp_mod
     import djmcp.tools.edit as edit_mod
 
     monkeypatch.setattr(common_mod, "TRACKS_DIR", tracks_dir)
     monkeypatch.setattr(common_mod, "PROCESSED_DIR", processed_dir)
     monkeypatch.setattr(analysis_mod, "TRACKS_DIR", tracks_dir)
     monkeypatch.setattr(edit_mod, "PROCESSED_DIR", processed_dir)
+    monkeypatch.setattr(dsp_mod, "PROCESSED_DIR", processed_dir)
 
+    return tracks_dir, processed_dir
+
+
+@pytest.fixture
+def synthetic_track(synthetic_dirs):
+    """A synthetic click-track track_id at KNOWN_BPM."""
+    tracks_dir, _ = synthetic_dirs
     track_id = "synthetic-click-track"
     _make_click_track_mp3(tracks_dir / f"{track_id}.mp3", KNOWN_BPM, FIXTURE_DURATION_SEC, SAMPLE_RATE)
+    return track_id
+
+
+@pytest.fixture
+def synthetic_track_b(synthetic_dirs):
+    """A second synthetic click-track track_id at a different BPM, for tests
+    that mix/crossfade/mashup two distinct tracks."""
+    tracks_dir, _ = synthetic_dirs
+    track_id = "synthetic-click-track-b"
+    _make_click_track_mp3(tracks_dir / f"{track_id}.mp3", 128, FIXTURE_DURATION_SEC, SAMPLE_RATE)
     return track_id

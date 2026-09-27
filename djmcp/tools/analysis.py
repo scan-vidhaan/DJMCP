@@ -38,6 +38,12 @@ _MINOR_CAMELOT = {0: 5, 1: 12, 2: 7, 3: 2, 4: 9, 5: 4, 6: 11, 7: 6, 8: 1, 9: 8, 
 
 MAX_SECTIONS = 8
 
+
+def pitch_class_of(key: str) -> int:
+    """Map a key string like "C" or "Am" to a pitch class 0-11 (mode ignored)."""
+    note = key[:-1] if key.endswith("m") else key
+    return _NOTE_NAMES.index(note)
+
 # librosa's default hop_length (512) quantizes frame times coarsely enough
 # to bias tempo estimation on tightly, evenly-spaced onsets (confirmed on a
 # synthetic click track: 512 -> 117.5 BPM vs a true 120; 256 -> 120.2 BPM).
