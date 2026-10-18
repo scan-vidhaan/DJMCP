@@ -8,7 +8,7 @@ license = { text = "MIT" }
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
-    "mcp>=1.0",
+    "mcp>=2.0",
     "yt-dlp>=2024.8.6",
     "requests>=2.31",
     "ddgs>=8.0",

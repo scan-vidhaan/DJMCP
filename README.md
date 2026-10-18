@@ -8,7 +8,7 @@ See [PLAN.md](<PLAN%20(1).md>) for the full build plan and phase-by-phase spec.
 
 ## Status
 
-Under active development, built phase by phase. Currently: **Phase 3+4 — effects, boosters, mixing**.
+Under active development, built phase by phase. Currently: **Phase 6 — MCP adapter** (phases 0–5.5 done; subagents and web UI next).
 
 ## Quickstart (dev)
 
@@ -116,3 +116,40 @@ it's opt-in rather than a base dependency.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Use from Claude Code / GitHub Copilot (MCP)
+
+The MCP server speaks stdio and exposes every tool (`search_song`, `download_song`,
+`analyze_track`, `crossfade`, `mashup`, `export_mp3`, `state_*`, ...). Slow tools (`mashup`,
+`vocal_boost`) return a `job_id`; poll it with `get_job`.
+
+Claude Code (`.mcp.json` in your project, or `claude mcp add`):
+
+```json
+{
+  "mcpServers": {
+    "djmcp": {
+      "command": "C:/path/to/dj-mcp/.venv/Scripts/python.exe",
+      "args": ["-m", "djmcp.mcp_adapter"],
+      "cwd": "C:/path/to/dj-mcp"
+    }
+  }
+}
+```
+
+GitHub Copilot (VS Code `.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "djmcp": {
+      "type": "stdio",
+      "command": "C:/path/to/dj-mcp/.venv/Scripts/python.exe",
+      "args": ["-m", "djmcp.mcp_adapter"],
+      "cwd": "C:/path/to/dj-mcp"
+    }
+  }
+}
+```
+
+Use the venv's interpreter so the MCP process finds the project's dependencies.
