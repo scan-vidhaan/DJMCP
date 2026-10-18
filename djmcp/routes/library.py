@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 import re
 
+import librosa
+import numpy as np
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -70,6 +73,39 @@ def audio(track_id: str) -> FileResponse:
         if candidate.exists():
             return FileResponse(candidate, media_type="audio/mpeg", filename=f"{track_id}.mp3")
     raise HTTPException(status_code=404, detail="track not found")
+
+
+def _find_audio(track_id: str):
+    for directory in (PROCESSED_DIR, EXPORTS_DIR, TRACKS_DIR):
+        candidate = directory / f"{track_id}.mp3"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+@router.get("/library/{track_id}/peaks")
+def peaks(track_id: str, bins: int = 900) -> dict:
+    """Waveform outline for the deck: `bins` loudness values in 0..1. Cached next to the track."""
+    track_id = _safe_id(track_id)
+    bins = max(50, min(bins, 4000))
+    path = _find_audio(track_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="track not found")
+
+    cache = path.with_name(f"{track_id}.peaks{bins}.json")
+    if cache.exists():
+        return json.loads(cache.read_text(encoding="utf-8"))
+
+    y, _ = librosa.load(str(path), sr=8000, mono=True)
+    usable = (len(y) // bins) * bins
+    if usable == 0:
+        result = {"peaks": [0.0] * bins}
+    else:
+        outline = np.abs(y[:usable]).reshape(bins, -1).max(axis=1)
+        top = float(outline.max()) or 1.0
+        result = {"peaks": [round(float(v) / top, 3) for v in outline]}
+    cache.write_text(json.dumps(result), encoding="utf-8")
+    return result
 
 
 class Cues(BaseModel):
