@@ -74,3 +74,10 @@ def test_check_seams_passes_steady_audio(synthetic_dirs):
     tone = 0.5 * np.sin(2 * np.pi * 220 * np.arange(sr * 6) / sr)
     save_audio(tone, sr, "steady")
     assert quality.check_seams("steady")["passed"]
+
+
+def test_key_shift_applied_only_when_within_limit():
+    assert mix._resolve_key_shift("C", "D") == 2
+    assert mix._resolve_key_shift("C", "A") == -3
+    assert mix._resolve_key_shift("C", "G") == 0  # needs -5: leave the vocal alone, don't half-shift
+    assert mix._resolve_key_shift("C", "F#") == 0

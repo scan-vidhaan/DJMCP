@@ -13,7 +13,7 @@ EXPECTED = {
     "export_mp3", "short_clip", "get_job",
     "state_create_job", "state_update", "state_get", "state_list_open", "state_resume",
     "find_trending", "medley", "check_seams", "state_set_plan", "state_add_assumption",
-    "state_complete", "request_input", "open_ui",
+    "state_complete", "request_input", "open_ui", "plan_mixes", "wait_for_job", "list_loops",
 }
 
 

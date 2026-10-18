@@ -25,6 +25,10 @@ def main() -> int:
     if "crash" in prompt:
         sys.stderr.write("boom")
         return 3
+    match = re.search(r"continue-old:(\w+)", prompt)
+    if match:  # the user chose to continue an earlier job
+        state.state_complete(job_id, {"continued_job": match.group(1)})
+        return 0
     if "quit-early" in prompt:
         say("hmm")
         return 0

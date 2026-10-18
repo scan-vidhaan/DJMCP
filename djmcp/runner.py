@@ -171,6 +171,12 @@ def _watch(job_id: str, proc: subprocess.Popen) -> None:
         job = state.state_get(job_id)
     except KeyError:
         return
+    continued = (job.get("result") or {}).get("continued_job")
+    if job["status"] == "done" and continued:
+        # The user chose to continue an earlier job instead of this new one:
+        # hand the work back to that job's own run.
+        resume(continued)
+        return
     if job["status"] in ("done", "waiting_input", "failed"):
         return
     if code != 0:

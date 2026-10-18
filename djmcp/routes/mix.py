@@ -27,6 +27,8 @@ class OverlayLoopRequest(BaseModel):
 class MashupRequest(BaseModel):
     vocal_track: str
     instrumental_track: str
+    vocal_start_sec: float | None = None
+    vocal_end_sec: float | None = None
 
 
 @router.post("/crossfade")
@@ -51,9 +53,15 @@ async def overlay_loop(req: OverlayLoopRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def _run_mashup(job_id: str, vocal_track: str, instrumental_track: str) -> None:
+def _run_mashup(
+    job_id: str,
+    vocal_track: str,
+    instrumental_track: str,
+    vocal_start_sec: float | None,
+    vocal_end_sec: float | None,
+) -> None:
     try:
-        result = asyncio.run(mix.mashup(vocal_track, instrumental_track))
+        result = asyncio.run(mix.mashup(vocal_track, instrumental_track, vocal_start_sec, vocal_end_sec))
         complete_job(job_id, result)
     except Exception as exc:
         fail_job(job_id, str(exc))
@@ -63,5 +71,7 @@ def _run_mashup(job_id: str, vocal_track: str, instrumental_track: str) -> None:
 async def mashup(req: MashupRequest, background_tasks: BackgroundTasks) -> dict:
     """demucs-based stem separation is always slow enough to warrant a background job."""
     job_id = create_job()
-    background_tasks.add_task(_run_mashup, job_id, req.vocal_track, req.instrumental_track)
+    background_tasks.add_task(
+        _run_mashup, job_id, req.vocal_track, req.instrumental_track, req.vocal_start_sec, req.vocal_end_sec
+    )
     return {"job_id": job_id}

@@ -142,6 +142,15 @@ def _semitone_shift_to_match(from_key: str, to_key: str) -> int:
     return diff
 
 
+def _resolve_key_shift(vocal_key: str, inst_key: str) -> int:
+    """Semitones to shift the vocal, or 0 when matching keys would need more
+    than MAX_KEY_SHIFT_SEMITONES. A clamped partial shift would leave the
+    vocal a couple of semitones off the instrumental -- worse than leaving it
+    alone, which is fine for Camelot-compatible keys."""
+    shift = _semitone_shift_to_match(vocal_key, inst_key)
+    return shift if abs(shift) <= MAX_KEY_SHIFT_SEMITONES else 0
+
+
 def _load_lyric_lines(track_id: str) -> list[dict]:
     """Segments from the transcribe_track sidecar, or [] if the track wasn't transcribed."""
     sidecar = TRACKS_DIR / f"{track_id}.transcript.json"
@@ -211,8 +220,7 @@ def _mashup_blocking(
     vocal_info = analysis.analyze_track(vocal_track_id)
     inst_info = analysis.analyze_track(instrumental_track_id)
 
-    shift = _semitone_shift_to_match(vocal_info["key"], inst_info["key"])
-    shift = max(-MAX_KEY_SHIFT_SEMITONES, min(MAX_KEY_SHIFT_SEMITONES, shift))
+    shift = _resolve_key_shift(vocal_info["key"], inst_info["key"])
     if shift != 0:
         vocal_y = librosa.effects.pitch_shift(vocal_y, sr=sr, n_steps=shift)
 

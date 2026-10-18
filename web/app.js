@@ -270,6 +270,10 @@ async function jobView(jobId) {
   }
 
   function render(job) {
+    if (job.status === "done" && job.result && job.result.continued_job) {
+      location.hash = `#/job/${job.result.continued_job}`; // the earlier job carries on
+      return;
+    }
     header.replaceChildren(
       h("h1", {}, job.goal),
       h("div", { class: "row", style: "margin-bottom:18px" }, statusPill(job.status), elapsed)

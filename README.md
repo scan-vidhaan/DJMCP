@@ -8,7 +8,32 @@ See [PLAN.md](<PLAN%20(1).md>) for the full build plan and phase-by-phase spec.
 
 ## Status
 
-Under active development, built phase by phase. Currently: **Phase 6 — MCP adapter** (phases 0–5.5 done; subagents and web UI next).
+Under active development, built phase by phase. Phases 0–8 are built: tools, MCP server, state, agents and skills, and the web app. The landing page is not started.
+
+## Make a mix (web app)
+
+```bash
+./.venv/Scripts/python -m djmcp
+```
+
+This starts the app and opens it in your browser. Type what you want ("make a mashup of the
+trending Bollywood songs"), press **Make it**, and watch progress. The assistant asks a question
+only when it matters (continue an unfinished job, or how to combine the songs), and every question
+has a default, or switch on **Autopilot** to never be asked. Finished mixes open in the **deck** to
+fine-tune (EQ, echo, reverb, cue points) and export (MP3, Instagram/TikTok/Shorts clips).
+
+The web app runs the agents through [Claude Code](https://claude.com/claude-code), so Claude Code
+must be installed and signed in on the same machine (the app tells you if it is not).
+
+### From a Claude Code chat instead
+
+```bash
+claude --agent dj-orchestrator
+```
+
+then just ask. The orchestrator opens the web app for you (`open_ui`) so progress and questions
+show there, not in the terminal. The five agents and eight skills live in [.claude/](.claude/).
+See [AGENTS_PLAN.md](AGENTS_PLAN.md) for how they work together.
 
 ## Quickstart (dev)
 
@@ -19,6 +44,7 @@ pip install -e .
 python -m djmcp
 ```
 
+`python -m djmcp` also opens a browser tab (set `DJMCP_NO_BROWSER=1` to skip; `DJMCP_RELOAD=1` for auto-reload).
 Then `curl localhost:8000/health` should return `{"status": "ok", "version": "0.1.0"}`.
 
 ### ffmpeg
@@ -106,8 +132,10 @@ Every effect peak-normalizes to -1 dBFS before export, so none of them can clip 
   bundled loop (see `storage/loops/README.md` — all 15 are synthesized, not sampled, so there's no
   licensing question) to the track's BPM and layers it in.
 - `POST /api/mix/mashup` (`{vocal_track, instrumental_track}`) — demucs-isolates the vocal,
-  key-shifts it to the instrumental's key (±3 semitones max), aligns first beats, level-matches to
-  -6 dBFS, mixes. Always returns `{job_id}`.
+  key-shifts it into the instrumental's key (only when that takes ≤3 semitones; otherwise it is
+  left alone), matches tempo, level-matches to -6 dBFS and mixes. The vocal enters one bar in with
+  a fade, and its edges snap to lyric lines when the track was transcribed. Always returns
+  `{job_id}`.
 
 `vocal_boost` and `mashup` need the `demucs` stem-separation model, installed via the optional
 `[boosters]` extra (`pip install -e ".[boosters]"`) — it pulls in PyTorch, a multi-GB install, so

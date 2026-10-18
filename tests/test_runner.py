@@ -104,3 +104,14 @@ def test_library_audio_rejects_traversal_and_lists(client, synthetic_dirs, synth
 
     client.put("/api/library/out-1/cues", json={"cues": [{"time": 12.5, "label": "drop"}]})
     assert client.get("/api/library/out-1/cues").json()["cues"][0]["label"] == "drop"
+
+
+def test_continuing_an_old_job_hands_work_back_to_it(client):
+    old_id = state.state_create_job("dj-orchestrator", "earlier mashup", {})
+    state.state_update(old_id, "download_1", "done")
+    new_id = client.post("/api/requests", json={"text": f"continue-old:{old_id}"}).json()["job_id"]
+
+    wait_for(client, new_id, lambda j: j["status"] == "done")
+    # the earlier job's own run started: the fake asks its question, parking it
+    old = wait_for(client, old_id, lambda j: j["status"] == "waiting_input")
+    assert old["question"]["key"] == "style"

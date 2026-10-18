@@ -25,6 +25,7 @@ from djmcp.tools import (
     effects,
     export,
     mix,
+    planner,
     quality,
     state,
     transcribe,
@@ -201,6 +202,19 @@ async def medley(track_ids: list[str], bars: int = 8) -> dict:
 
 
 @mcp.tool()
+def plan_mixes(
+    track_ids: list[str],
+    mode: Literal["sequence", "layered", "both"] = "both",
+    top_k: int = 4,
+    titles: dict[str, str] | None = None,
+) -> dict:
+    """Rank ways to combine 2+ analyzed tracks (Camelot key fit, tempo gap, energy flow).
+    mode: sequence (A then B then C), layered (one vocal over another instrumental) or both
+    (layered opening, then the rest in sequence). Returns {plans:[{id, summary, score, reason, steps}]}."""
+    return planner.plan_mixes(track_ids, mode, top_k, titles)
+
+
+@mcp.tool()
 async def check_seams(track_id: str, threshold_db: float = 9.0) -> dict:
     """Find abrupt level jumps (hard cuts, clipped entries) in a finished mix. {passed, jumps[]}."""
     return await asyncio.to_thread(quality.check_seams, track_id, threshold_db)
@@ -222,6 +236,26 @@ async def short_clip(track_id: str, duration: float = 30, format: Literal["ig", 
 
 
 # --- Jobs --------------------------------------------------------------------
+
+
+@mcp.tool()
+async def wait_for_job(job_id: str, timeout_sec: int = 60) -> dict:
+    """Wait up to timeout_sec (max 120) for a background job (mashup, vocal_boost) to finish.
+    Returns the job; if status is still pending/running, call again."""
+    for _ in range(max(1, min(timeout_sec, 120)) // 2):
+        job = _get_job(job_id)
+        if job is None:
+            raise ValueError(f"no job found for job_id={job_id!r}")
+        if job["status"] in ("done", "failed"):
+            return job
+        await asyncio.sleep(2)
+    return _get_job(job_id)
+
+
+@mcp.tool()
+def list_loops() -> list[dict]:
+    """Bundled drum/808 loops usable with overlay_loop: [{name, bpm, bars}]."""
+    return [{"name": m["name"], "bpm": m["bpm"], "bars": m["bars"]} for m in mix._manifest()]
 
 
 @mcp.tool()
