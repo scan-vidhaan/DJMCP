@@ -1,7 +1,10 @@
 """SQLite-backed job/step store so agent work survives a killed session.
 
-Jobs are opened by the orchestrator, steps are upserted by specialist agents
-after each meaningful action, and state_get computes which step is next.
+Jobs are opened by the orchestrator (or the UI runner), steps are upserted
+by specialist agents after each meaningful action, and state_get computes
+which step is next. The same record carries what the UI shows: the chosen
+plan, the assumptions the agents made, the pending question (if any) and
+the final result.
 """
 
 from __future__ import annotations
@@ -14,12 +17,14 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from djmcp import config
 
-# Known step sequences for fixed-shape agents. Agents with a data-dependent
-# shape (set-builder: track_N / transition_N_M, track-scout: candidate_N)
-# have no fixed sequence, so next_step falls back to the first pending step.
-AGENT_STEPS: dict[str, list[str]] = {
-    "mashup-builder": ["search", "download_a", "download_b", "analyze_a", "analyze_b", "mashup", "export"],
-}
+# Optional fixed step sequences per agent name, used to compute next_step and
+# to auto-close a job when the last step is done. Agents whose steps depend on
+# the request (how many songs, how many transitions) are dynamic: next_step is
+# then the first step not yet done, and the agent closes the job itself with
+# state_complete.
+AGENT_STEPS: dict[str, list[str]] = {}
+
+OPEN_STATUSES = ("open", "waiting_input", "failed")
 
 
 def _now() -> datetime:
@@ -30,9 +35,14 @@ class Job(SQLModel, table=True):
     id: str = Field(primary_key=True)
     agent: str
     goal: str
-    params: str = "{}"  # JSON
-    status: str = "open"  # open | done | failed
+    params: str = "{}"  # JSON; params["autopilot"] suppresses questions
+    status: str = "open"  # open | waiting_input | done | failed
     error: str | None = None
+    plan: str = "null"  # JSON: the combination/plan the agents chose
+    assumptions: str = "[]"  # JSON list of strings
+    question: str = "null"  # JSON: the pending question, if any
+    answers: str = "{}"  # JSON: key -> answer, for questions already settled
+    result: str = "null"  # JSON: final output (track_id, path, ...)
     resumed_at: datetime | None = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
@@ -84,6 +94,11 @@ def _serialize(session: Session, job: Job) -> dict:
         "params": json.loads(job.params),
         "status": job.status,
         "error": job.error,
+        "plan": json.loads(job.plan),
+        "assumptions": json.loads(job.assumptions),
+        "question": json.loads(job.question),
+        "answers": json.loads(job.answers),
+        "result": json.loads(job.result),
         "created_at": job.created_at.isoformat(),
         "updated_at": job.updated_at.isoformat(),
         "resumed_at": job.resumed_at.isoformat() if job.resumed_at else None,
@@ -99,6 +114,14 @@ def _require(session: Session, job_id: str) -> Job:
     if job is None:
         raise KeyError(f"no job found for job_id={job_id!r}")
     return job
+
+
+def _save(session: Session, job: Job) -> dict:
+    job.updated_at = _now()
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return _serialize(session, job)
 
 
 def state_create_job(agent: str, goal: str, params: dict | None = None) -> str:
@@ -132,20 +155,17 @@ def state_update(
         session.add(row)
         session.flush()
 
-        job.updated_at = _now()
         if status == "failed":
             job.status = "failed"
             job.error = error or f"step {step!r} failed"
         elif status == "done":
-            job.status = "open"  # a retried step reopens a previously failed job
-            job.error = None
+            if job.status == "failed":  # a retried step reopens a failed job
+                job.status = "open"
+                job.error = None
             steps = session.exec(select(JobStep).where(JobStep.job_id == job_id)).all()
             if job.agent in AGENT_STEPS and _next_step(job, steps) is None:
                 job.status = "done"
-        session.add(job)
-        session.commit()
-        session.refresh(job)
-        return _serialize(session, job)
+        return _save(session, job)
 
 
 def state_get(job_id: str) -> dict:
@@ -156,7 +176,7 @@ def state_get(job_id: str) -> dict:
 def state_list_open(agent: str | None = None, include_failed: bool = True) -> list[dict]:
     """Unfinished jobs, newest first. Failed jobs are included by default
     because they are exactly the ones worth resuming."""
-    statuses = ["open", "failed"] if include_failed else ["open"]
+    statuses = OPEN_STATUSES if include_failed else ("open", "waiting_input")
     with Session(_get_engine()) as session:
         query = select(Job).where(Job.status.in_(statuses)).order_by(Job.updated_at.desc())
         if agent:
@@ -174,9 +194,89 @@ def state_resume(job_id: str) -> dict:
     with Session(_get_engine()) as session:
         job = _require(session, job_id)
         job.resumed_at = _now()
-        job.status = "open"
+        if job.status == "failed":
+            job.status = "open"
+            job.error = None
+        return _save(session, job)
+
+
+def state_set_plan(job_id: str, plan: dict) -> dict:
+    """Store the chosen plan so a resumed run does not re-plan."""
+    with Session(_get_engine()) as session:
+        job = _require(session, job_id)
+        job.plan = json.dumps(plan)
+        return _save(session, job)
+
+
+def state_add_assumption(job_id: str, text: str) -> dict:
+    """Record a decision the agents made on the user's behalf; shown on the result page."""
+    with Session(_get_engine()) as session:
+        job = _require(session, job_id)
+        items = json.loads(job.assumptions)
+        if text not in items:
+            items.append(text)
+        job.assumptions = json.dumps(items)
+        return _save(session, job)
+
+
+def state_request_input(
+    job_id: str,
+    key: str,
+    prompt: str,
+    options: list[str] | None = None,
+    default: str | None = None,
+) -> dict:
+    """Ask the user a question through the UI.
+
+    `key` names the decision ("style", "resume_old_job"). Returns
+    {"answered": True, "answer": ...} when the answer is already known
+    (asked before, or the job runs in autopilot and `default` is taken);
+    otherwise parks the job as waiting_input and returns {"answered": False}
+    -- the agent should then stop and let the runner resume it once the user
+    answers.
+    """
+    with Session(_get_engine()) as session:
+        job = _require(session, job_id)
+        answers = json.loads(job.answers)
+        if key in answers:
+            return {"answered": True, "answer": answers[key]}
+
+        if json.loads(job.params).get("autopilot"):
+            answers[key] = default
+            job.answers = json.dumps(answers)
+            assumptions = json.loads(job.assumptions)
+            assumptions.append(f"{prompt} -> {default} (autopilot)")
+            job.assumptions = json.dumps(assumptions)
+            _save(session, job)
+            return {"answered": True, "answer": default, "autopilot": True}
+
+        job.question = json.dumps(
+            {"key": key, "prompt": prompt, "options": options or [], "default": default}
+        )
+        job.status = "waiting_input"
+        _save(session, job)
+        return {"answered": False, "waiting": True}
+
+
+def state_answer(job_id: str, key: str, answer: str) -> dict:
+    """Record the user's answer (UI) and reopen the job."""
+    with Session(_get_engine()) as session:
+        job = _require(session, job_id)
+        answers = json.loads(job.answers)
+        answers[key] = answer
+        job.answers = json.dumps(answers)
+        job.question = "null"
+        if job.status == "waiting_input":
+            job.status = "open"
+        return _save(session, job)
+
+
+def state_complete(job_id: str, result: dict | None = None) -> dict:
+    """Close a job as done with its final output."""
+    with Session(_get_engine()) as session:
+        job = _require(session, job_id)
+        job.status = "done"
         job.error = None
-        session.add(job)
-        session.commit()
-        session.refresh(job)
-        return _serialize(session, job)
+        job.question = "null"
+        job.result = json.dumps(result or {})
+        return _save(session, job)

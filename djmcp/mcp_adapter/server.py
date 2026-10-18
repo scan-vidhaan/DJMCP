@@ -11,10 +11,12 @@ stdout is the protocol channel: nothing here may print to it.
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, Awaitable, Literal
 
 from mcp.server.mcpserver import MCPServer
 
+from djmcp import ui_launcher
 from djmcp.jobs import complete_job, create_job, fail_job, get_job as _get_job
 from djmcp.tools import (
     analysis,
@@ -23,8 +25,10 @@ from djmcp.tools import (
     effects,
     export,
     mix,
+    quality,
     state,
     transcribe,
+    trending,
     youtube,
 )
 
@@ -62,6 +66,13 @@ async def search_song(query: str, limit: int = 5) -> list[dict]:
 async def download_song(url: str) -> dict:
     """Download a YouTube URL as a 320kbps mp3. Returns {track_id, path, title, duration}."""
     return await asyncio.to_thread(youtube.download_song, url)
+
+
+@mcp.tool()
+async def find_trending(region: str = "India", genre: str = "Bollywood", limit: int = 8) -> dict:
+    """Search current charts for a region and genre. Returns chart-page hits with text excerpts;
+    read them, pick the actual song titles, then call search_song for each."""
+    return await trending.find_trending(region, genre, limit)
 
 
 # --- Understanding -----------------------------------------------------------
@@ -169,10 +180,30 @@ async def overlay_loop(track_id: str, loop_name: str, bars: int, start_beat: int
 
 
 @mcp.tool()
-async def mashup(vocal_track_id: str, instrumental_track_id: str) -> dict:
-    """Vocals of one song over the instrumental of another, key-shifted and downbeat-aligned.
+async def mashup(
+    vocal_track_id: str,
+    instrumental_track_id: str,
+    vocal_start_sec: float | None = None,
+    vocal_end_sec: float | None = None,
+) -> dict:
+    """Vocals of one song over the instrumental of another: key-shifted, tempo-matched, entering one
+    bar in with fades, edges snapped to lyric lines when the vocal track was transcribed.
+    vocal_start_sec/vocal_end_sec choose which part of the vocal song to use (default all).
     Slow (demucs on both tracks): returns {job_id}; poll get_job."""
-    return _start_job(mix.mashup(vocal_track_id, instrumental_track_id))
+    return _start_job(mix.mashup(vocal_track_id, instrumental_track_id, vocal_start_sec, vocal_end_sec))
+
+
+@mcp.tool()
+async def medley(track_ids: list[str], bars: int = 8) -> dict:
+    """Chain 2+ tracks in order with a beat-matched crossfade between each pair
+    (short blend for pairs more than 10% apart in tempo). Returns the result plus transitions."""
+    return await asyncio.to_thread(mix.medley, track_ids, bars)
+
+
+@mcp.tool()
+async def check_seams(track_id: str, threshold_db: float = 9.0) -> dict:
+    """Find abrupt level jumps (hard cuts, clipped entries) in a finished mix. {passed, jumps[]}."""
+    return await asyncio.to_thread(quality.check_seams, track_id, threshold_db)
 
 
 # --- Export ------------------------------------------------------------------
@@ -239,6 +270,60 @@ def state_list_open(agent: str | None = None) -> list[dict]:
 def state_resume(job_id: str) -> dict:
     """Mark a job resumed and return its state; continue from next_step."""
     return state.state_resume(job_id)
+
+
+@mcp.tool()
+def state_set_plan(job_id: str, plan: dict) -> dict:
+    """Save the chosen plan (mode, order, per-pair reasons) so a resumed run does not re-plan."""
+    return state.state_set_plan(job_id, plan)
+
+
+@mcp.tool()
+def state_add_assumption(job_id: str, text: str) -> dict:
+    """Record a decision made for the user (shown on the result page), e.g. 'trending = top 6 on current charts'."""
+    return state.state_add_assumption(job_id, text)
+
+
+@mcp.tool()
+def state_complete(job_id: str, result: dict | None = None) -> dict:
+    """Close the job as done. result should include track_id and path of the final output."""
+    return state.state_complete(job_id, result)
+
+
+ANSWER_WAIT_SEC = 600
+
+
+@mcp.tool()
+async def request_input(
+    job_id: str,
+    key: str,
+    prompt: str,
+    options: list[str] | None = None,
+    default: str | None = None,
+) -> dict:
+    """Ask the user a question in the web UI. key names the decision (e.g. "style"); always give a default.
+    Returns {answered: true, answer} when known (asked before, or autopilot took the default).
+    If {answered: false}: stop and end your turn; you are resumed after the user answers."""
+    result = state.state_request_input(job_id, key, prompt, options, default)
+    if result["answered"] or os.environ.get("DJMCP_RUNNER") == "1":
+        return result
+
+    # Running in a chat session (not the UI runner): nothing will resume us,
+    # so show the question in the UI and wait here for the answer.
+    await asyncio.to_thread(ui_launcher.open_ui, job_id)
+    for _ in range(ANSWER_WAIT_SEC // 2):
+        await asyncio.sleep(2)
+        answers = state.state_get(job_id)["answers"]
+        if key in answers:
+            return {"answered": True, "answer": answers[key]}
+    return {"answered": False, "waiting": True, "timed_out": True}
+
+
+@mcp.tool()
+async def open_ui(job_id: str | None = None) -> dict:
+    """Start the web UI if needed and show it to the user (jumps to job_id if given).
+    Call this first when a user is chatting with you, so they can watch progress and answer questions there."""
+    return await asyncio.to_thread(ui_launcher.open_ui, job_id)
 
 
 def main() -> None:

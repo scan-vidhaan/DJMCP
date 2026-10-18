@@ -11,7 +11,7 @@ TRACKS_DIR = STORAGE_DIR / "tracks"
 PROCESSED_DIR = STORAGE_DIR / "processed"
 LOOPS_DIR = STORAGE_DIR / "loops"
 EXPORTS_DIR = STORAGE_DIR / "exports"
-STATE_DB_PATH = STORAGE_DIR / "state.db"
+STATE_DB_PATH = Path(os.environ.get("DJMCP_STATE_DB", STORAGE_DIR / "state.db"))
 
 for _dir in (TRACKS_DIR, PROCESSED_DIR, LOOPS_DIR, EXPORTS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)

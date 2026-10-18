@@ -75,3 +75,44 @@ async def eq(req: EqRequest) -> dict:
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class ChainStep(BaseModel):
+    tool: str
+    params: dict = {}
+
+
+class CommitRequest(BaseModel):
+    track_id: str
+    chain: list[ChainStep]
+
+
+_CHAIN_TOOLS = {
+    "reverb": effects.apply_reverb,
+    "filter": effects.apply_filter,
+    "delay": effects.apply_delay,
+    "eq": effects.apply_eq,
+}
+
+
+def _run_chain(track_id: str, chain: list[ChainStep]) -> dict:
+    result = {"track_id": track_id}
+    for step in chain:
+        fn = _CHAIN_TOOLS.get(step.tool)
+        if fn is None:
+            raise ValueError(f"unknown effect {step.tool!r}; expected one of {sorted(_CHAIN_TOOLS)}")
+        result = fn(result["track_id"], **step.params)
+    return result
+
+
+@router.post("/commit")
+async def commit(req: CommitRequest) -> dict:
+    """Render the deck's live-preview settings into a new file, effect by effect."""
+    if not req.chain:
+        raise HTTPException(status_code=400, detail="chain is empty")
+    try:
+        return await asyncio.to_thread(_run_chain, req.track_id, req.chain)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
