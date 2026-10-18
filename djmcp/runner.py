@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -44,12 +45,30 @@ class ClaudeNotFound(RuntimeError):
     pass
 
 
+def _find_vscode_binary() -> str | None:
+    """The Claude Code VS Code extension bundles its own claude binary, so
+    people who only installed the extension have no `claude` on PATH."""
+    name = "claude.exe" if sys.platform == "win32" else "claude"
+    candidates: list[Path] = []
+    for editor in (".vscode", ".vscode-insiders", ".cursor", ".windsurf"):
+        extensions = Path.home() / editor / "extensions"
+        candidates += extensions.glob(f"anthropic.claude-code-*/resources/native-binary/{name}")
+    if not candidates:
+        return None
+
+    def version_key(path: Path) -> tuple:
+        match = re.search(r"claude-code-(\d+(?:\.\d+)*)", str(path))
+        return tuple(int(n) for n in match.group(1).split(".")) if match else (0,)
+
+    return str(max(candidates, key=version_key))
+
+
 def claude_command() -> list[str]:
     override = os.environ.get("DJMCP_CLAUDE_CMD")
     if override:
         # posix=False (Windows paths with backslashes) keeps the quotes on tokens
         return [t.strip('"') for t in shlex.split(override, posix=(sys.platform != "win32"))]
-    found = shutil.which("claude")
+    found = shutil.which("claude") or _find_vscode_binary()
     if not found:
         raise ClaudeNotFound(
             "Claude Code was not found. Install it from https://claude.com/claude-code, "

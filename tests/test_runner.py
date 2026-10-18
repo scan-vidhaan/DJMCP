@@ -115,3 +115,18 @@ def test_continuing_an_old_job_hands_work_back_to_it(client):
     # the earlier job's own run started: the fake asks its question, parking it
     old = wait_for(client, old_id, lambda j: j["status"] == "waiting_input")
     assert old["question"]["key"] == "style"
+
+
+def test_finds_newest_vscode_extension_binary(monkeypatch, tmp_path):
+    name = "claude.exe" if sys.platform == "win32" else "claude"
+    for version in ("2.1.284", "2.1.301", "2.1.9"):
+        binary = tmp_path / ".vscode" / "extensions" / f"anthropic.claude-code-{version}-win32-x64" / "resources" / "native-binary" / name
+        binary.parent.mkdir(parents=True)
+        binary.write_text("")
+    monkeypatch.setattr(runner.Path, "home", lambda: tmp_path)
+    assert "2.1.301" in runner._find_vscode_binary()  # numeric compare: 2.1.301 > 2.1.9
+
+
+def test_no_vscode_extension_means_none(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner.Path, "home", lambda: tmp_path)
+    assert runner._find_vscode_binary() is None
