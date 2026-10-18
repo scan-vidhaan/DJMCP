@@ -76,6 +76,7 @@ def test_empty_request_rejected(client):
 def test_missing_claude_gives_clear_error(client, monkeypatch):
     monkeypatch.delenv("DJMCP_CLAUDE_CMD")
     monkeypatch.setattr(runner.shutil, "which", lambda _: None)
+    monkeypatch.setattr(runner, "_find_vscode_binary", lambda: None)  # this machine may have the extension
     res = client.post("/api/requests", json={"text": "hi"})
     assert res.status_code == 503 and "Claude Code" in res.json()["detail"]
     assert client.get("/api/system/check").json()["available"] is False
