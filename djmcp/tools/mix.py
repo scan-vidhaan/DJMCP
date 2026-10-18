@@ -126,9 +126,12 @@ def _mashup_blocking(vocal_track_id: str, instrumental_track_id: str) -> dict:
     vocal_y = stems._to_mono_numpy(vocal_stems["vocals"])
     sr = stems._get_separator().samplerate
 
-    inst_y, inst_sr = load_audio(instrumental_track_id)
-    if inst_sr != sr:
-        inst_y = librosa.resample(inst_y, orig_sr=inst_sr, target_sr=sr)
+    # instrumental_track_id is a normal song too, not a pre-stripped
+    # instrumental -- separate it as well and drop its own vocal stem, or
+    # the mashup would layer two sets of vocals on top of each other.
+    inst_stems = stems.separate(instrumental_track_id)
+    inst_only = sum(wave for name, wave in inst_stems.items() if name != "vocals")
+    inst_y = stems._to_mono_numpy(inst_only)
 
     vocal_info = analysis.analyze_track(vocal_track_id)
     inst_info = analysis.analyze_track(instrumental_track_id)
@@ -159,8 +162,10 @@ def _mashup_blocking(vocal_track_id: str, instrumental_track_id: str) -> dict:
 
 
 async def mashup(vocal_track_id: str, instrumental_track_id: str) -> dict:
-    """demucs-isolate the vocal, key-shift + downbeat-align it to the instrumental, mix.
+    """demucs-isolate the vocal from vocal_track_id and the non-vocal stems
+    from instrumental_track_id (both are normal songs, not pre-stripped
+    instrumentals), key-shift + downbeat-align the vocal, mix.
 
-    Slow (stem separation); call via a background job.
+    Slow (stem separation on both tracks); call via a background job.
     """
     return await asyncio.to_thread(_mashup_blocking, vocal_track_id, instrumental_track_id)

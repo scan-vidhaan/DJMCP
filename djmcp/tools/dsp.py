@@ -34,9 +34,21 @@ def peak_normalize(y: np.ndarray, target_dbfs: float = TARGET_PEAK_DBFS) -> np.n
     return y / peak * target_linear
 
 
+_MAX_SOURCE_ID_LEN = 40
+
+
 def new_track_id(source_track_id: str, suffix: str, *parts: object) -> str:
+    """A new id derived from source_track_id, bounded in length regardless of
+    chain depth. Each id embeds only a truncated prefix of its immediate
+    parent, not the parent's full (possibly already-chained) name -- without
+    this, a run of several crossfade/trim/overlay calls in sequence grows
+    the id by one "-<op>-<hash>" segment per step and eventually blows past
+    Windows' ~260 char MAX_PATH once combined with the storage directory
+    path, failing with a misleading FileNotFoundError on write.
+    """
     digest = hashlib.sha1(f"{source_track_id}-{suffix}-{parts}".encode()).hexdigest()[:8]
-    return f"{source_track_id}-{suffix}-{digest}"
+    truncated_source = source_track_id[:_MAX_SOURCE_ID_LEN]
+    return f"{truncated_source}-{suffix}-{digest}"
 
 
 def save_audio(y: np.ndarray, sr: int, track_id: str) -> dict:
